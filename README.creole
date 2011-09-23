@@ -1,0 +1,3 @@
+= Elastic Search =
+
+This package contains Elastic Search bindings for node.js.
