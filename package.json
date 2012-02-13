@@ -3,6 +3,6 @@
 	"version": "0.0.1",
 	"description": "A simple client for ElasticSearch.",
 	"author": "Izaak Schroeder",
-	"engine": "node >= 0.4.10",
+	"engine": "node >= 0.6.0",
 	"main": "elasticsearch.js"
 }

@@ -6,7 +6,7 @@ var http = require('http');
  *
  */
 var Connection = function(host, port) {
-	this.agent = new http.getAgent(host, port);
+	this.agent = new http.Agent({host: host, port: port});
 	this.host = host;
 	this.port = port;
 }
@@ -36,6 +36,7 @@ Connection.prototype.request = function(method, path, callback) {
  */
 Connection.prototype.exists = function(path, callback) {
 	this.request('HEAD', path, function(response) {
+		console.log(response)
 		callback(response.statusCode == 200)
 	}).end();
 }
@@ -93,16 +94,18 @@ Connection.prototype.get = function(path, data, callback) {
  */
 Connection.prototype.put = function(path, data, callback) {
 	var req = this.request('PUT', path, function(response) {
-		if (response.statusCode >= 200 && response.statusCode < 300) {
+		if (response.statusCode < 200 || response.statusCode > 300) {
 			console.log("Error ("+response.statusCode+")!");
-			var buf = "";
-			response.on("data", function(data){
-				buf += data;
-			}).on("end", function(){
-				console.log("Error was: "+buf);
-			})
+			
 		}
-		callback && callback();
+
+		var buf = "";
+		response.on("data", function(data){
+			buf += data;
+		}).on("end", function(){
+			callback && callback(buf);
+		})
+		
 	});
 	if (data) {
 		var json = JSON.stringify(data);
@@ -119,7 +122,14 @@ Connection.prototype.put = function(path, data, callback) {
  *
  */
 Connection.prototype.delete = function(path, callback) {
-	return this.request('DELETE', path, callback);
+	var req = this.request('DELETE', path, function(response) {
+		console.log(path)
+		console.log(response.statusCode)
+		if (callback)
+			callback();
+	});
+	req.end();
+	return this;
 }
 
 /**
@@ -233,7 +243,7 @@ Index.prototype.alias = function(name) {
  *
  *
  */
-Index.prototype.find = function(query, callback) {
+Index.prototype.search = function(query, callback) {
 	this.connection.get(this.path()+"/_search", query, callback);
 	return this;
 }
@@ -253,6 +263,10 @@ Mapping.prototype.exists = function(done) {
 	return this;
 }
 
+/**
+ *
+ *
+ */
 Mapping.prototype.delete = function(done) {
 	this.connection.delete(this.path(), done);
 	return this;
@@ -274,13 +288,6 @@ Mapping.prototype.describe = function(done) {
 	this.connection.get(this.path() + "/_mapping", done);
 }
 
-/**
- *
- *
- */
-Mapping.prototype.documents = function() {
-	
-}
 
 /**
  *
@@ -299,8 +306,16 @@ Mapping.prototype.materialize = function(data, done) {
  *
  *
  */
-Mapping.prototype.document = function(name) {
-	return new Document(this, name);
+Mapping.prototype.document = function(name, data, callback) {
+	var doc = new Document(this, name);
+	if (data)
+		doc.set(data, callback);
+	return doc;
+}
+
+Mapping.prototype.search = function(query, callback) {
+	this.connection.get(this.path()+"/_search", query, callback);
+	return this;
 }
 
 /**
@@ -318,15 +333,33 @@ var Document = function(mapping, id) {
  *
  */
 Document.prototype.exists = function(done) {
-	this.connection.exists(this.path(), done )
+	this.connection.get(this.path()+"?fields=", function(result) {
+		done(result.exists);
+	})
 }
 
 /**
  *
  *
  */
-Document.prototype.set = function(data) {
-	this.connection.put(this.path(), data);
+Document.prototype.set = function(data, callback) {
+	this.connection.put(this.path(), data, callback);
+}
+
+/**
+ *
+ *
+ */
+Document.prototype.get = function(callback) {
+	this.connection.get(this.path(), callback);
+}
+
+/**
+ *
+ *
+ */
+Document.prototype.delete = function(callback) {
+	this.connection.delete(this.path(), callback);
 }
 
 /**
@@ -337,4 +370,8 @@ Document.prototype.path = function() {
 	return this.mapping.path() + "/" + this.id;
 }
 
+exports.connect = function(host, port) {
+	return new Connection(host, port);
+}
 
+exports.defaultPort = 9200;
